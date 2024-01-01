@@ -6,10 +6,13 @@ import (
 	"math/rand"
 	"time"
 
+	"image/color"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
+// 定数の定義
 const (
 	screenWidth         = 640 // 画面の幅
 	screenHeight        = 480 // 画面の高さ
@@ -19,23 +22,32 @@ const (
 	obstacleSize        = 20  // 障害物のサイズ
 )
 
+// Star構造体
+type Star struct {
+	x, y float64
+}
+
+// Game構造体：ゲームの状態を保持
 type Game struct {
 	x, y             float64    // キャラクターの位置
-	obstacles        []Obstacle // 複数の障害物
-	isGameOver       bool       // ゲームオーバーの状態
+	obstacles        []Obstacle // 障害物の配列
+	stars            []Star     // 星の配列
+	isGameOver       bool       // ゲームオーバーかどうか
 	score            int        // スコア
-	startTime        int64      // ゲーム開始時刻（Unixナノ秒）
-	lastSecond       int64      // 最後にスコアが更新された時刻（秒）
-	lastObstacleTime int64      // 最後に障害物が追加された時刻（秒）
+	startTime        int64      // ゲーム開始時刻
+	lastSecond       int64      // 最後にスコアが更新された時刻
+	lastObstacleTime int64      // 最後に障害物が追加された時刻
 	charImage        *ebiten.Image
 	obstacleImage    *ebiten.Image
 }
 
+// Obstacle構造体
 type Obstacle struct {
 	x, y  float64
 	speed float64
 }
 
+// NewGame関数：新しいゲームの状態を初期化
 func NewGame() *Game {
 	charImg, _, err := ebitenutil.NewImageFromFile("assets/char.png")
 	if err != nil {
@@ -47,6 +59,15 @@ func NewGame() *Game {
 		log.Fatalf("failed to load obstacle image: %v", err)
 	}
 
+	// 星をランダムに生成
+	stars := make([]Star, 100)
+	for i := range stars {
+		stars[i] = Star{
+			x: float64(rand.Intn(logicalScreenWidth)),
+			y: float64(rand.Intn(logicalScreenHeight)),
+		}
+	}
+
 	return &Game{
 		x:                50,
 		y:                logicalScreenHeight / 2,
@@ -54,20 +75,22 @@ func NewGame() *Game {
 		lastObstacleTime: -10,
 		charImage:        charImg,
 		obstacleImage:    obstacleImg,
+		stars:            stars,
 	}
 }
 
+// Updateメソッド：ゲームの状態を更新
 func (g *Game) Update() error {
 	// ゲームオーバー時の処理
 	if g.isGameOver {
 		if ebiten.IsKeyPressed(ebiten.KeyR) {
-			// ゲームをリセットする処理
+			// ゲームをリセット
 			*g = *NewGame()
 		}
 		return nil
 	}
 
-	// キーボード入力に応じてキャラクターの位置を更新
+	// キャラクターの移動
 	newX, newY := g.x, g.y
 	if ebiten.IsKeyPressed(ebiten.KeyW) {
 		newY--
@@ -84,15 +107,23 @@ func (g *Game) Update() error {
 	g.x = max(0, min(newX, logicalScreenWidth-charSize))
 	g.y = max(0, min(newY, logicalScreenHeight-charSize))
 
+	// 障害物とスコアの更新
+	updateObstaclesAndScore(g)
+
+	return nil
+}
+
+// updateObstaclesAndScore関数：障害物の更新とスコアの計算
+func updateObstaclesAndScore(g *Game) {
 	currentTime := time.Now().UnixNano()
 	currentSecond := (currentTime - g.startTime) / int64(time.Second)
 
-	// 100秒経過していない、かつ10秒ごとに新しい障害物を追加
+	// 10秒ごとに障害物を追加
 	if currentSecond-g.lastObstacleTime >= 10 && currentSecond < 100 {
 		g.obstacles = append(g.obstacles, Obstacle{
 			x:     logicalScreenWidth,
 			y:     float64(rand.Intn(logicalScreenHeight - obstacleSize)),
-			speed: 2 + rand.Float64(), // 障害物の速度をランダム化
+			speed: 2 + rand.Float64(),
 		})
 		g.lastObstacleTime = currentSecond
 	}
@@ -114,29 +145,55 @@ func (g *Game) Update() error {
 		}
 	}
 
+	// スコアの更新
 	if !g.isGameOver && currentSecond > g.lastSecond {
 		if g.score < 999 {
 			g.score++
 		}
 		g.lastSecond = currentSecond
 	}
-
-	return nil
 }
 
+// Drawメソッド：ゲームの画面を描画
 func (g *Game) Draw(screen *ebiten.Image) {
+	// 星を描画（背景）
+	for _, star := range g.stars {
+		ebitenutil.DrawRect(screen, star.x, star.y, 1, 1, color.White) // 白い点
+	}
+
+	// キャラクターの描画
+	drawCharacter(g, screen)
+
+	// 障害物の描画
+	drawObstacles(g, screen)
+
+	// スコアの表示
+	scoreText := fmt.Sprintf("Score: %d", g.score)
+	ebitenutil.DebugPrintAt(screen, scoreText, logicalScreenWidth-80, 5)
+
+	// ゲームオーバーメッセージの表示
+	if g.isGameOver {
+		displayGameOverMessage(screen)
+	}
+}
+
+// drawCharacter関数：キャラクターを描画
+func drawCharacter(g *Game, screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Scale(2, 2)
-	charW, charH := g.obstacleImage.Size()
+	op.GeoM.Scale(2, 2) // キャラクターを2倍にスケーリング
+	charW, charH := g.charImage.Size()
 	charW *= 2
 	charH *= 2
 	op.GeoM.Translate(-float64(charW)/2, -float64(charH)/2)
 	op.GeoM.Translate(g.x, g.y)
 	screen.DrawImage(g.charImage, op)
+}
 
+// drawObstacles関数：障害物を描画
+func drawObstacles(g *Game, screen *ebiten.Image) {
 	for _, obstacle := range g.obstacles {
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Scale(2, 2)
+		op.GeoM.Scale(2, 2) // 障害物を2倍にスケーリング
 		obW, obH := g.obstacleImage.Size()
 		obW *= 2
 		obH *= 2
@@ -144,38 +201,40 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		op.GeoM.Translate(obstacle.x, obstacle.y)
 		screen.DrawImage(g.obstacleImage, op)
 	}
-
-	scoreText := fmt.Sprintf("Score: %d", g.score)
-	ebitenutil.DebugPrintAt(screen, scoreText, logicalScreenWidth-80, 5)
-
-	if g.isGameOver {
-		gameOverMsg := "GAME OVER"
-		x := (logicalScreenWidth - len(gameOverMsg)*7) / 2
-		y := logicalScreenHeight / 2
-		ebitenutil.DebugPrintAt(screen, gameOverMsg, x, y)
-
-		retryMsg := "RETRY: PRESS [R]"
-		retryX := (logicalScreenWidth - len(retryMsg)*7) / 2
-		retryY := y + 20
-		ebitenutil.DebugPrintAt(screen, retryMsg, retryX, retryY)
-	}
 }
 
+// displayGameOverMessage関数：ゲームオーバーメッセージを表示
+func displayGameOverMessage(screen *ebiten.Image) {
+	gameOverMsg := "GAME OVER"
+	x := (logicalScreenWidth - len(gameOverMsg)*7) / 2
+	y := logicalScreenHeight / 2
+	ebitenutil.DebugPrintAt(screen, gameOverMsg, x, y)
+
+	retryMsg := "RETRY: PRESS [R]"
+	retryX := (logicalScreenWidth - len(retryMsg)*7) / 2
+	retryY := y + 20
+	ebitenutil.DebugPrintAt(screen, retryMsg, retryX, retryY)
+}
+
+// Layoutメソッド：外部ウィンドウのサイズが変更されたときのレイアウトを決定
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return logicalScreenWidth, logicalScreenHeight
 }
 
+// main関数：プログラムのエントリーポイント
 func main() {
-	rand.Seed(time.Now().UnixNano())
-	game := NewGame()
+	rand.Seed(time.Now().UnixNano()) // 乱数のシードを設定
+	game := NewGame()                // 新しいゲームを作成
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Avoid Game")
 
+	// ゲームループを開始
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}
 }
 
+// min関数：2つのfloat64のうち、小さい方を返す
 func min(a, b float64) float64 {
 	if a < b {
 		return a
@@ -183,6 +242,7 @@ func min(a, b float64) float64 {
 	return b
 }
 
+// max関数：2つのfloat64のうち、大きい方を返す
 func max(a, b float64) float64 {
 	if a > b {
 		return a
