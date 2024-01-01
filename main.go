@@ -12,14 +12,21 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
-// 定数の定義
+// ゲーム状態の定義
 const (
-	screenWidth         = 640 // 画面の幅
-	screenHeight        = 480 // 画面の高さ
-	charSize            = 20  // キャラクターのサイズ
-	logicalScreenWidth  = 320 // 論理的な画面の幅
-	logicalScreenHeight = 240 // 論理的な画面の高さ
-	obstacleSize        = 20  // 障害物のサイズ
+	StateStart = iota
+	StatePlay
+	StateGameOver
+)
+
+// その他の定数
+const (
+	screenWidth         = 640
+	screenHeight        = 480
+	charSize            = 20
+	logicalScreenWidth  = 320
+	logicalScreenHeight = 240
+	obstacleSize        = 20
 )
 
 // Star構造体
@@ -39,6 +46,7 @@ type Game struct {
 	lastObstacleTime int64      // 最後に障害物が追加された時刻
 	charImage        *ebiten.Image
 	obstacleImage    *ebiten.Image
+	state            int // ゲームの現在の状態
 }
 
 // Obstacle構造体
@@ -59,7 +67,6 @@ func NewGame() *Game {
 		log.Fatalf("failed to load obstacle image: %v", err)
 	}
 
-	// 星をランダムに生成
 	stars := make([]Star, 100)
 	for i := range stars {
 		stars[i] = Star{
@@ -76,39 +83,49 @@ func NewGame() *Game {
 		charImage:        charImg,
 		obstacleImage:    obstacleImg,
 		stars:            stars,
+		state:            StateStart, // スタート画面から開始
 	}
 }
 
 // Updateメソッド：ゲームの状態を更新
 func (g *Game) Update() error {
-	// ゲームオーバー時の処理
-	if g.isGameOver {
-		if ebiten.IsKeyPressed(ebiten.KeyR) {
-			// ゲームをリセット
-			*g = *NewGame()
+	switch g.state {
+	case StateStart:
+		// スタート画面での処理
+		if ebiten.IsKeyPressed(ebiten.KeyEnter) {
+			g.state = StatePlay
 		}
-		return nil
-	}
+	case StatePlay:
+		// ゲームプレイ中の処理
+		newX, newY := g.x, g.y
+		if ebiten.IsKeyPressed(ebiten.KeyW) {
+			newY--
+		}
+		if ebiten.IsKeyPressed(ebiten.KeyS) {
+			newY++
+		}
+		if ebiten.IsKeyPressed(ebiten.KeyA) {
+			newX--
+		}
+		if ebiten.IsKeyPressed(ebiten.KeyD) {
+			newX++
+		}
+		g.x = max(0, min(newX, logicalScreenWidth-charSize))
+		g.y = max(0, min(newY, logicalScreenHeight-charSize))
 
-	// キャラクターの移動
-	newX, newY := g.x, g.y
-	if ebiten.IsKeyPressed(ebiten.KeyW) {
-		newY--
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyS) {
-		newY++
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyA) {
-		newX--
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyD) {
-		newX++
-	}
-	g.x = max(0, min(newX, logicalScreenWidth-charSize))
-	g.y = max(0, min(newY, logicalScreenHeight-charSize))
+		updateObstaclesAndScore(g)
 
-	// 障害物とスコアの更新
-	updateObstaclesAndScore(g)
+		if g.isGameOver {
+			g.state = StateGameOver // ゲームオーバー状態に遷移
+		}
+
+	case StateGameOver:
+		// ゲームオーバー時の処理（Rを押すと直接プレイ画面に移行）
+		if ebiten.IsKeyPressed(ebiten.KeyR) {
+			*g = *NewGame()
+			g.state = StatePlay // 直接プレイ状態に移行
+		}
+	}
 
 	return nil
 }
@@ -119,7 +136,7 @@ func updateObstaclesAndScore(g *Game) {
 	currentSecond := (currentTime - g.startTime) / int64(time.Second)
 
 	// 10秒ごとに障害物を追加
-	if currentSecond-g.lastObstacleTime >= 10 && currentSecond < 100 {
+	if currentSecond-g.lastObstacleTime >= 10 && currentSecond < 50 {
 		g.obstacles = append(g.obstacles, Obstacle{
 			x:     logicalScreenWidth,
 			y:     float64(rand.Intn(logicalScreenHeight - obstacleSize)),
@@ -139,7 +156,7 @@ func updateObstaclesAndScore(g *Game) {
 		}
 
 		// 衝突判定
-		if !g.isGameOver && g.x < g.obstacles[i].x+obstacleSize && g.x+charSize > g.obstacles[i].x &&
+		if g.x < g.obstacles[i].x+obstacleSize && g.x+charSize > g.obstacles[i].x &&
 			g.y < g.obstacles[i].y+obstacleSize && g.y+charSize > g.obstacles[i].y {
 			g.isGameOver = true
 		}
@@ -156,25 +173,41 @@ func updateObstaclesAndScore(g *Game) {
 
 // Drawメソッド：ゲームの画面を描画
 func (g *Game) Draw(screen *ebiten.Image) {
-	// 星を描画（背景）
-	for _, star := range g.stars {
-		ebitenutil.DrawRect(screen, star.x, star.y, 1, 1, color.White) // 白い点
+	switch g.state {
+	case StateStart:
+		// スタート画面の描画
+		displayStartScreen(screen)
+	case StatePlay:
+		// ゲームプレイ画面の描画
+		for _, star := range g.stars {
+			ebitenutil.DrawRect(screen, star.x, star.y, 1, 1, color.White) // 白い点
+		}
+		drawCharacter(g, screen)
+		drawObstacles(g, screen)
+		scoreText := fmt.Sprintf("Score: %d", g.score)
+		ebitenutil.DebugPrintAt(screen, scoreText, logicalScreenWidth-80, 5)
+	case StateGameOver:
+		// ゲームオーバー画面の描画
+		displayGameOverMessage(screen, g.score) // スコアを渡す
 	}
+}
 
-	// キャラクターの描画
-	drawCharacter(g, screen)
+// displayStartScreen関数：スタート画面を表示
+func displayStartScreen(screen *ebiten.Image) {
+	title := "Avoid!"
+	titleX := (logicalScreenWidth - len(title)*7) / 2
+	titleY := logicalScreenHeight / 3
+	ebitenutil.DebugPrintAt(screen, title, titleX, titleY)
 
-	// 障害物の描画
-	drawObstacles(g, screen)
+	startMsg := "PRESS ENTER TO START"
+	startX := (logicalScreenWidth - len(startMsg)*7) / 2
+	startY := logicalScreenHeight / 2
+	ebitenutil.DebugPrintAt(screen, startMsg, startX, startY)
 
-	// スコアの表示
-	scoreText := fmt.Sprintf("Score: %d", g.score)
-	ebitenutil.DebugPrintAt(screen, scoreText, logicalScreenWidth-80, 5)
-
-	// ゲームオーバーメッセージの表示
-	if g.isGameOver {
-		displayGameOverMessage(screen)
-	}
+	controls := "WASD to Move"
+	controlsX := (logicalScreenWidth - len(controls)*7) / 2
+	controlsY := logicalScreenHeight/2 + 20
+	ebitenutil.DebugPrintAt(screen, controls, controlsX, controlsY)
 }
 
 // drawCharacter関数：キャラクターを描画
@@ -203,16 +236,21 @@ func drawObstacles(g *Game, screen *ebiten.Image) {
 	}
 }
 
-// displayGameOverMessage関数：ゲームオーバーメッセージを表示
-func displayGameOverMessage(screen *ebiten.Image) {
+// displayGameOverMessage関数：ゲームオーバーメッセージを表示（スコアも表示）
+func displayGameOverMessage(screen *ebiten.Image, score int) {
 	gameOverMsg := "GAME OVER"
 	x := (logicalScreenWidth - len(gameOverMsg)*7) / 2
-	y := logicalScreenHeight / 2
+	y := logicalScreenHeight / 3 // Y位置を少し上に調整
 	ebitenutil.DebugPrintAt(screen, gameOverMsg, x, y)
+
+	scoreMsg := fmt.Sprintf("Score: %d", score)
+	scoreX := (logicalScreenWidth - len(scoreMsg)*7) / 2
+	scoreY := y + 20 // ゲームオーバーメッセージの下に表示
+	ebitenutil.DebugPrintAt(screen, scoreMsg, scoreX, scoreY)
 
 	retryMsg := "RETRY: PRESS [R]"
 	retryX := (logicalScreenWidth - len(retryMsg)*7) / 2
-	retryY := y + 20
+	retryY := scoreY + 20 // スコアの下に表示
 	ebitenutil.DebugPrintAt(screen, retryMsg, retryX, retryY)
 }
 
@@ -226,7 +264,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano()) // 乱数のシードを設定
 	game := NewGame()                // 新しいゲームを作成
 	ebiten.SetWindowSize(screenWidth, screenHeight)
-	ebiten.SetWindowTitle("Avoid Game")
+	ebiten.SetWindowTitle("Avoid!")
 
 	// ゲームループを開始
 	if err := ebiten.RunGame(game); err != nil {
