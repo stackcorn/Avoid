@@ -115,18 +115,24 @@ func (g *Game) Update() error {
 	case StatePlay:
 		// ゲームプレイ中の処理
 		newX, newY := g.x, g.y
+		moveSpeed := 1.5 // 移動速度
+
 		if ebiten.IsKeyPressed(ebiten.KeyW) {
-			newY--
+			newY -= moveSpeed
 		}
+
 		if ebiten.IsKeyPressed(ebiten.KeyS) {
-			newY++
+			newY += moveSpeed
 		}
+
 		if ebiten.IsKeyPressed(ebiten.KeyA) {
-			newX--
+			newX -= moveSpeed
 		}
+
 		if ebiten.IsKeyPressed(ebiten.KeyD) {
-			newX++
+			newX += moveSpeed
 		}
+
 		g.x = max(0, min(newX, logicalScreenWidth-charSize))
 		g.y = max(0, min(newY, logicalScreenHeight-charSize))
 
