@@ -27,6 +27,7 @@ const (
 	logicalScreenWidth  = 320
 	logicalScreenHeight = 240
 	obstacleSize        = 20
+	itemSize            = 20
 )
 
 // Star構造体
@@ -38,19 +39,28 @@ type Star struct {
 type Game struct {
 	x, y             float64    // キャラクターの位置
 	obstacles        []Obstacle // 障害物の配列
+	items            []Item     // スコア加算アイテムの配列
 	stars            []Star     // 星の配列
 	isGameOver       bool       // ゲームオーバーかどうか
 	score            int        // スコア
 	startTime        int64      // ゲーム開始時刻
 	lastSecond       int64      // 最後にスコアが更新された時刻
 	lastObstacleTime int64      // 最後に障害物が追加された時刻
+	lastItemTime     int64      // 最後にアイテムが追加された時刻
 	charImage        *ebiten.Image
 	obstacleImage    *ebiten.Image
+	itemImage        *ebiten.Image
 	state            int // ゲームの現在の状態
 }
 
 // Obstacle構造体
 type Obstacle struct {
+	x, y  float64
+	speed float64
+}
+
+// Item構造体：スコア加算アイテム
+type Item struct {
 	x, y  float64
 	speed float64
 }
@@ -67,6 +77,11 @@ func NewGame() *Game {
 		log.Fatalf("failed to load obstacle image: %v", err)
 	}
 
+	itemImg, _, err := ebitenutil.NewImageFromFile("assets/drink.png")
+	if err != nil {
+		log.Fatalf("failed to load item image: %v", err)
+	}
+
 	stars := make([]Star, 100)
 	for i := range stars {
 		stars[i] = Star{
@@ -80,8 +95,10 @@ func NewGame() *Game {
 		y:                logicalScreenHeight / 2,
 		startTime:        time.Now().UnixNano(),
 		lastObstacleTime: -10,
+		lastItemTime:     -10,
 		charImage:        charImg,
 		obstacleImage:    obstacleImg,
+		itemImage:        itemImg,
 		stars:            stars,
 		state:            StateStart, // スタート画面から開始
 	}
@@ -114,6 +131,7 @@ func (g *Game) Update() error {
 		g.y = max(0, min(newY, logicalScreenHeight-charSize))
 
 		updateObstaclesAndScore(g)
+		updateItems(g)
 
 		if g.isGameOver {
 			g.state = StateGameOver // ゲームオーバー状態に遷移
@@ -171,6 +189,32 @@ func updateObstaclesAndScore(g *Game) {
 	}
 }
 
+// updateItems関数：アイテムの更新とスコアの加算
+func updateItems(g *Game) {
+	currentTime := time.Now().UnixNano()
+	if currentTime-g.lastItemTime >= int64(10*time.Second) {
+		g.items = append(g.items, Item{
+			x:     float64(rand.Intn(logicalScreenWidth - itemSize)),
+			y:     -itemSize,
+			speed: 1 + rand.Float64(),
+		})
+		g.lastItemTime = currentTime
+	}
+
+	for i := len(g.items) - 1; i >= 0; i-- {
+		if len(g.items) > 0 { // スライスが空でないことを確認
+			g.items[i].y += g.items[i].speed
+			if g.x < g.items[i].x+itemSize && g.x+charSize > g.items[i].x &&
+				g.y < g.items[i].y+itemSize && g.y+charSize > g.items[i].y {
+				g.score += 10
+				g.items = append(g.items[:i], g.items[i+1:]...)
+			} else if g.items[i].y > logicalScreenHeight {
+				g.items = append(g.items[:i], g.items[i+1:]...)
+			}
+		}
+	}
+}
+
 // Drawメソッド：ゲームの画面を描画
 func (g *Game) Draw(screen *ebiten.Image) {
 	switch g.state {
@@ -184,6 +228,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 		drawCharacter(g, screen)
 		drawObstacles(g, screen)
+		drawItems(g, screen) // アイテムの描画
 		scoreText := fmt.Sprintf("Score: %d", g.score)
 		ebitenutil.DebugPrintAt(screen, scoreText, logicalScreenWidth-80, 5)
 	case StateGameOver:
@@ -233,6 +278,20 @@ func drawObstacles(g *Game, screen *ebiten.Image) {
 		op.GeoM.Translate(-float64(obW)/2, -float64(obH)/2)
 		op.GeoM.Translate(obstacle.x, obstacle.y)
 		screen.DrawImage(g.obstacleImage, op)
+	}
+}
+
+// drawItems関数：アイテムを描画
+func drawItems(g *Game, screen *ebiten.Image) {
+	for _, item := range g.items {
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(2, 2) // アイテムを2倍にスケーリング
+		itW, itH := g.itemImage.Size()
+		itW *= 2
+		itH *= 2
+		op.GeoM.Translate(-float64(itW)/2, -float64(itH)/2)
+		op.GeoM.Translate(item.x, item.y)
+		screen.DrawImage(g.itemImage, op)
 	}
 }
 
