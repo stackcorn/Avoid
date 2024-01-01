@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"image/color"
 	"log"
 	"math/rand"
 	"time"
@@ -28,34 +27,33 @@ type Game struct {
 	startTime        int64      // ゲーム開始時刻（Unixナノ秒）
 	lastSecond       int64      // 最後にスコアが更新された時刻（秒）
 	lastObstacleTime int64      // 最後に障害物が追加された時刻（秒）
+	charImage        *ebiten.Image
+	obstacleImage    *ebiten.Image
 }
 
 type Obstacle struct {
-	x, y  float64 // 障害物の位置
-	speed float64 // 障害物の速度
-}
-
-func min(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b float64) float64 {
-	if a > b {
-		return a
-	}
-	return b
+	x, y  float64
+	speed float64
 }
 
 func NewGame() *Game {
+	charImg, _, err := ebitenutil.NewImageFromFile("assets/char.png")
+	if err != nil {
+		log.Fatalf("failed to load character image: %v", err)
+	}
+
+	obstacleImg, _, err := ebitenutil.NewImageFromFile("assets/obstacle.png")
+	if err != nil {
+		log.Fatalf("failed to load obstacle image: %v", err)
+	}
+
 	return &Game{
 		x:                50,
 		y:                logicalScreenHeight / 2,
 		startTime:        time.Now().UnixNano(),
 		lastObstacleTime: -10,
-		// その他の初期化が必要なフィールド
+		charImage:        charImg,
+		obstacleImage:    obstacleImg,
 	}
 }
 
@@ -64,7 +62,7 @@ func (g *Game) Update() error {
 	if g.isGameOver {
 		if ebiten.IsKeyPressed(ebiten.KeyR) {
 			// ゲームをリセットする処理
-			*g = *NewGame() // NewGameはGameの初期状態を生成する関数
+			*g = *NewGame()
 		}
 		return nil
 	}
@@ -90,10 +88,10 @@ func (g *Game) Update() error {
 	currentSecond := (currentTime - g.startTime) / int64(time.Second)
 
 	// 100秒経過していない、かつ10秒ごとに新しい障害物を追加
-	if currentSecond < 100 && currentSecond-g.lastObstacleTime >= 10 {
+	if currentSecond-g.lastObstacleTime >= 10 && currentSecond < 100 {
 		g.obstacles = append(g.obstacles, Obstacle{
 			x:     logicalScreenWidth,
-			y:     float64(rand.Intn(logicalScreenHeight-obstacleSize)) + 10,
+			y:     float64(rand.Intn(logicalScreenHeight - obstacleSize)),
 			speed: 2 + rand.Float64(), // 障害物の速度をランダム化
 		})
 		g.lastObstacleTime = currentSecond
@@ -106,7 +104,7 @@ func (g *Game) Update() error {
 		// 画面の左端に到達したら、右端から再スタート
 		if g.obstacles[i].x < -obstacleSize {
 			g.obstacles[i].x = logicalScreenWidth
-			g.obstacles[i].y = float64(rand.Intn(logicalScreenHeight-obstacleSize)) + 10
+			g.obstacles[i].y = float64(rand.Intn(logicalScreenHeight - obstacleSize))
 		}
 
 		// 衝突判定
@@ -127,43 +125,40 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	ebitenutil.DrawRect(screen, g.x, g.y, charSize, charSize, color.RGBA{255, 0, 0, 255})
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Scale(2, 2)
+	charW, charH := g.obstacleImage.Size()
+	charW *= 2
+	charH *= 2
+	op.GeoM.Translate(-float64(charW)/2, -float64(charH)/2)
+	op.GeoM.Translate(g.x, g.y)
+	screen.DrawImage(g.charImage, op)
 
 	for _, obstacle := range g.obstacles {
-		opts := &ebiten.DrawImageOptions{}
-		opts.GeoM.Translate(obstacle.x, obstacle.y)
-		screen.DrawImage(obstacleImage(screen), opts)
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(2, 2)
+		obW, obH := g.obstacleImage.Size()
+		obW *= 2
+		obH *= 2
+		op.GeoM.Translate(-float64(obW)/2, -float64(obH)/2)
+		op.GeoM.Translate(obstacle.x, obstacle.y)
+		screen.DrawImage(g.obstacleImage, op)
 	}
 
 	scoreText := fmt.Sprintf("Score: %d", g.score)
 	ebitenutil.DebugPrintAt(screen, scoreText, logicalScreenWidth-80, 5)
 
 	if g.isGameOver {
-		msg := "GAME OVER"
-		x := (logicalScreenWidth - len(msg)*7) / 2
+		gameOverMsg := "GAME OVER"
+		x := (logicalScreenWidth - len(gameOverMsg)*7) / 2
 		y := logicalScreenHeight / 2
-		ebitenutil.DebugPrintAt(screen, msg, x, y)
+		ebitenutil.DebugPrintAt(screen, gameOverMsg, x, y)
 
 		retryMsg := "RETRY: PRESS [R]"
 		retryX := (logicalScreenWidth - len(retryMsg)*7) / 2
-		retryY := y + 20 // GAME OVERメッセージの下に表示
+		retryY := y + 20
 		ebitenutil.DebugPrintAt(screen, retryMsg, retryX, retryY)
 	}
-}
-
-func obstacleImage(screen *ebiten.Image) *ebiten.Image {
-	radius := 10.0
-	obstacleColor := color.RGBA{0, 128, 0, 255}
-
-	obstacleImage := ebiten.NewImage(int(radius*2), int(radius*2))
-	for y := -radius; y < radius; y++ {
-		for x := -radius; x < radius; x++ {
-			if x*x+y*y <= radius*radius {
-				obstacleImage.Set(int(x+radius), int(y+radius), obstacleColor)
-			}
-		}
-	}
-	return obstacleImage
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
@@ -172,16 +167,25 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	game := &Game{
-		x:                50,
-		y:                logicalScreenHeight / 2,
-		startTime:        time.Now().UnixNano(),
-		lastObstacleTime: -10, // 初期値を-10に設定して、ゲーム開始時に障害物が追加されるようにする
-	}
+	game := NewGame()
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Avoid Game")
 
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func min(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
 }
