@@ -3,6 +3,8 @@ package main
 import (
 	"image/color"
 	"log"
+	"math/rand"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -48,12 +50,14 @@ func (g *Game) Update() error {
 	// 画面の左端に到達したら、右端から再スタート
 	if g.obstacleX < -20 { // 20は障害物の大きさを想定した値
 		g.obstacleX = logicalScreenWidth
+		// Y座標をランダムに設定
+		g.obstacleY = float64(rand.Intn(logicalScreenHeight-20)) + 10 // ランダムな位置
 	}
 
 	return nil
 }
 
-// min は2つの値のうち小さい方を返します。
+// min は2つの値のうち小さい方を返す
 func min(a, b float64) float64 {
 	if a < b {
 		return a
@@ -61,7 +65,7 @@ func min(a, b float64) float64 {
 	return b
 }
 
-// max は2つの値のうち大きい方を返します。
+// max は2つの値のうち大きい方を返す
 func max(a, b float64) float64 {
 	if a > b {
 		return a
@@ -96,6 +100,10 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 }
 
 func main() {
+	// 乱数生成器を初期化
+	rand.Seed(time.Now().UnixNano())
+
+	// ...（Gameインスタンスの作成とゲームの実行）
 	game := &Game{
 		x:             50,                      // キャラクターの初期位置X
 		y:             logicalScreenHeight / 2, // キャラクターの初期位置Y
@@ -107,7 +115,7 @@ func main() {
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Avoid Game")
 
-	// ゲームを実行し、gameインスタンスを渡します。
+	// ゲームを実行し、gameインスタンスを渡す。
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}
