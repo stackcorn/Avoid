@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 	"math/rand"
@@ -23,6 +24,9 @@ type Game struct {
 	obstacleX, obstacleY float64 // 障害物の位置
 	obstacleSpeed        float64 // 障害物の速度
 	isGameOver           bool    // ゲームオーバーの状態
+	score                int     // スコア
+	startTime            int64   // ゲーム開始時刻（Unixナノ秒）
+	lastSecond           int64   // 最後にスコアが更新された時刻（秒）
 }
 
 func (g *Game) Update() error {
@@ -60,6 +64,18 @@ func (g *Game) Update() error {
 		if g.x < g.obstacleX+20 && g.x+charSize > g.obstacleX &&
 			g.y < g.obstacleY+20 && g.y+charSize > g.obstacleY {
 			g.isGameOver = true
+		}
+	}
+
+	// ゲームオーバーでない場合にスコアを更新
+	if !g.isGameOver {
+		currentSecond := (time.Now().UnixNano() - g.startTime) / int64(time.Second)
+		if currentSecond > g.lastSecond {
+			// スコアが999未満の場合のみスコアを加算
+			if g.score < 999 {
+				g.score++
+			}
+			g.lastSecond = currentSecond
 		}
 	}
 
@@ -103,6 +119,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	opts.GeoM.Translate(g.obstacleX, g.obstacleY)
 	screen.DrawImage(obstacleImage, opts)
 
+	// スコアのテキストを表示
+	scoreText := fmt.Sprintf("Score: %d", g.score)
+	ebitenutil.DebugPrintAt(screen, scoreText, logicalScreenWidth-80, 5) // 位置は適宜調整
+
 	// ゲームオーバー時のテキストを表示
 	if g.isGameOver {
 		msg := "GAME OVER"
@@ -128,6 +148,7 @@ func main() {
 		obstacleX:     logicalScreenWidth,      // 画面の右端から開始
 		obstacleY:     logicalScreenHeight / 2, // 画面の中央の高さ
 		obstacleSpeed: 2,                       // 移動速度を適宜設定
+		startTime:     time.Now().UnixNano(),
 	}
 	// ...（Ebitenの設定）
 	ebiten.SetWindowSize(screenWidth, screenHeight)
