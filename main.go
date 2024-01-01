@@ -17,7 +17,9 @@ const (
 )
 
 type Game struct {
-	x, y float64
+	x, y                 float64 // キャラクターの位置
+	obstacleX, obstacleY float64 // 障害物の位置
+	obstacleSpeed        float64 // 障害物の速度
 }
 
 func (g *Game) Update() error {
@@ -40,6 +42,14 @@ func (g *Game) Update() error {
 	g.x = max(0, min(newX, logicalScreenWidth-charSize))
 	g.y = max(0, min(newY, logicalScreenHeight-charSize))
 
+	// 障害物を左に移動
+	g.obstacleX -= g.obstacleSpeed
+
+	// 画面の左端に到達したら、右端から再スタート
+	if g.obstacleX < -20 { // 20は障害物の大きさを想定した値
+		g.obstacleX = logicalScreenWidth
+	}
+
 	return nil
 }
 
@@ -61,6 +71,24 @@ func max(a, b float64) float64 {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	ebitenutil.DrawRect(screen, g.x, g.y, 20, 20, color.RGBA{255, 0, 0, 255})
+
+	radius := 10.0
+	obstacleColor := color.RGBA{0, 128, 0, 255} // 緑色
+
+	// 円を描画するための画像を作成
+	obstacleImage := ebiten.NewImage(int(radius*2), int(radius*2))
+	for y := -radius; y < radius; y++ {
+		for x := -radius; x < radius; x++ {
+			if x*x+y*y <= radius*radius {
+				obstacleImage.Set(int(x+radius), int(y+radius), obstacleColor)
+			}
+		}
+	}
+
+	// 画像を画面に描画
+	opts := &ebiten.DrawImageOptions{}
+	opts.GeoM.Translate(g.obstacleX, g.obstacleY)
+	screen.DrawImage(obstacleImage, opts)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
@@ -68,9 +96,19 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 }
 
 func main() {
-	ebiten.SetWindowSize(640, 480)
+	game := &Game{
+		x:             50,                      // キャラクターの初期位置X
+		y:             logicalScreenHeight / 2, // キャラクターの初期位置Y
+		obstacleX:     logicalScreenWidth,      // 画面の右端から開始
+		obstacleY:     logicalScreenHeight / 2, // 画面の中央の高さ
+		obstacleSpeed: 2,                       // 移動速度を適宜設定
+	}
+	// ...（Ebitenの設定）
+	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Avoid Game")
-	if err := ebiten.RunGame(&Game{}); err != nil {
+
+	// ゲームを実行し、gameインスタンスを渡します。
+	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}
 }
