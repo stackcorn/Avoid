@@ -22,6 +22,7 @@ type Game struct {
 	x, y                 float64 // キャラクターの位置
 	obstacleX, obstacleY float64 // 障害物の位置
 	obstacleSpeed        float64 // 障害物の速度
+	isGameOver           bool    // ゲームオーバーの状態
 }
 
 func (g *Game) Update() error {
@@ -52,6 +53,14 @@ func (g *Game) Update() error {
 		g.obstacleX = logicalScreenWidth
 		// Y座標をランダムに設定
 		g.obstacleY = float64(rand.Intn(logicalScreenHeight-20)) + 10 // ランダムな位置
+	}
+
+	// 衝突判定
+	if !g.isGameOver {
+		if g.x < g.obstacleX+20 && g.x+charSize > g.obstacleX &&
+			g.y < g.obstacleY+20 && g.y+charSize > g.obstacleY {
+			g.isGameOver = true
+		}
 	}
 
 	return nil
@@ -93,6 +102,15 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	opts := &ebiten.DrawImageOptions{}
 	opts.GeoM.Translate(g.obstacleX, g.obstacleY)
 	screen.DrawImage(obstacleImage, opts)
+
+	// ゲームオーバー時のテキストを表示
+	if g.isGameOver {
+		msg := "GAME OVER"
+		x := (logicalScreenWidth - len(msg)*7) / 2 // テキストを中央に表示
+		y := logicalScreenHeight / 2
+		ebitenutil.DebugPrintAt(screen, msg, x, y)
+	}
+
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
