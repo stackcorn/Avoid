@@ -49,8 +49,23 @@ func max(a, b float64) float64 {
 	return b
 }
 
+func NewGame() *Game {
+	return &Game{
+		x:                50,
+		y:                logicalScreenHeight / 2,
+		startTime:        time.Now().UnixNano(),
+		lastObstacleTime: -10,
+		// その他の初期化が必要なフィールド
+	}
+}
+
 func (g *Game) Update() error {
+	// ゲームオーバー時の処理
 	if g.isGameOver {
+		if ebiten.IsKeyPressed(ebiten.KeyR) {
+			// ゲームをリセットする処理
+			*g = *NewGame() // NewGameはGameの初期状態を生成する関数
+		}
 		return nil
 	}
 
@@ -128,6 +143,11 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		x := (logicalScreenWidth - len(msg)*7) / 2
 		y := logicalScreenHeight / 2
 		ebitenutil.DebugPrintAt(screen, msg, x, y)
+
+		retryMsg := "RETRY: PRESS [R]"
+		retryX := (logicalScreenWidth - len(retryMsg)*7) / 2
+		retryY := y + 20 // GAME OVERメッセージの下に表示
+		ebitenutil.DebugPrintAt(screen, retryMsg, retryX, retryY)
 	}
 }
 
