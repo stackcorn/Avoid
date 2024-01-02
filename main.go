@@ -160,7 +160,7 @@ func updateObstaclesAndScore(g *Game) {
 	currentSecond := (currentTime - g.startTime) / int64(time.Second)
 
 	// 10秒ごとに障害物を追加
-	if currentSecond-g.lastObstacleTime >= 10 && currentSecond < 50 {
+	if currentSecond-g.lastObstacleTime >= 10 && currentSecond < 100 {
 		g.obstacles = append(g.obstacles, Obstacle{
 			x:     logicalScreenWidth,
 			y:     float64(rand.Intn(logicalScreenHeight - obstacleSize)),
@@ -265,7 +265,7 @@ func displayStartScreen(screen *ebiten.Image) {
 func drawCharacter(g *Game, screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Scale(2, 2) // キャラクターを2倍にスケーリング
-	charW, charH := g.charImage.Size()
+	charW, charH := g.charImage.Bounds().Dx(), g.charImage.Bounds().Dy()
 	charW *= 2
 	charH *= 2
 	op.GeoM.Translate(-float64(charW)/2, -float64(charH)/2)
@@ -278,7 +278,7 @@ func drawObstacles(g *Game, screen *ebiten.Image) {
 	for _, obstacle := range g.obstacles {
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Scale(2, 2) // 障害物を2倍にスケーリング
-		obW, obH := g.obstacleImage.Size()
+		obW, obH := g.obstacleImage.Bounds().Dx(), g.obstacleImage.Bounds().Dy()
 		obW *= 2
 		obH *= 2
 		op.GeoM.Translate(-float64(obW)/2, -float64(obH)/2)
@@ -292,7 +292,7 @@ func drawItems(g *Game, screen *ebiten.Image) {
 	for _, item := range g.items {
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Scale(2, 2) // アイテムを2倍にスケーリング
-		itW, itH := g.itemImage.Size()
+		itW, itH := g.itemImage.Bounds().Dx(), g.itemImage.Bounds().Dy()
 		itW *= 2
 		itH *= 2
 		op.GeoM.Translate(-float64(itW)/2, -float64(itH)/2)
@@ -326,8 +326,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 
 // main関数：プログラムのエントリーポイント
 func main() {
-	rand.Seed(time.Now().UnixNano()) // 乱数のシードを設定
-	game := NewGame()                // 新しいゲームを作成
+	game := NewGame() // 新しいゲームを作成
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Avoid!")
 
