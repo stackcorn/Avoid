@@ -160,7 +160,7 @@ func updateObstaclesAndScore(g *Game) {
 	currentSecond := (currentTime - g.startTime) / int64(time.Second)
 
 	// 10秒ごとに障害物を追加
-	if currentSecond-g.lastObstacleTime >= 10 && currentSecond < 50 {
+	if currentSecond-g.lastObstacleTime >= 10 && currentSecond < 100 {
 		g.obstacles = append(g.obstacles, Obstacle{
 			x:     logicalScreenWidth,
 			y:     float64(rand.Intn(logicalScreenHeight - obstacleSize)),
