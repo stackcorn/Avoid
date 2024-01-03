@@ -42,4 +42,5 @@ go run main.go
 
 ## 謝辞
 
-このゲームは[Ebitengine](https://ebitengine.org/ja/)を使用しています。[Ebitengine](https://ebitengine.org/ja/)の開発者に感謝いたします。
+このゲームは[Ebitengine](https://ebitengine.org/ja/)を使用しています。
+[Ebitengine](https://ebitengine.org/ja/)の開発者の方々に感謝いたします。
