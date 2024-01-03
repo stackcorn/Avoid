@@ -28,7 +28,7 @@ go run main.go
 
 ## 開発環境
 
-- 言語: Go
+- 言語: Go 1.21.5
 
 - ゲームエンジン: [Ebitengine](https://ebitengine.org/ja/)
 
