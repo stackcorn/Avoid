@@ -20,8 +20,5 @@
 # Go workspace file
 go.work
 
-# assets
-assets/
-
 # .DS_Store
 .DS_Store
